@@ -21,6 +21,9 @@ jobs:
       - name: Check tracked sensitive paths
         shell: pwsh
         run: ./scripts/Check-TrackedFiles.ps1
+      - name: Verify safe local configuration generation
+        shell: pwsh
+        run: ./scripts/Test-LocalEnvironment.ps1
       - name: Scan Git history for secrets
         shell: pwsh
         run: ./scripts/Scan-Secrets.ps1
@@ -33,6 +36,7 @@ jobs:
       - name: Run unit and Testcontainers integration tests
         run: dotnet test OrderProcessingPlatform.slnx --configuration Release --no-build --logger trx --results-directory TestResults
       - name: Prepare local demo configuration
+        id: demo_config
         shell: pwsh
         run: |
           ./scripts/Initialize-LocalEnvironment.ps1
@@ -45,7 +49,7 @@ jobs:
           ./scripts/Verify-Compose.ps1
           ./scripts/Demo.ps1 -Expected Confirmed
       - name: Clean up containers
-        if: always()
+        if: always() && steps.demo_config.outcome == 'success'
         run: docker compose down --remove-orphans
       - uses: actions/upload-artifact@v4
         if: always()
