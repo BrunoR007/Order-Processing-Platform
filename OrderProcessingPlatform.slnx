@@ -1,5 +1,11 @@
 <Solution>
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/Contracts/Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Messaging/Messaging.csproj" />
+    <Project Path="src/BuildingBlocks/Observability/Observability.csproj" />
+  </Folder>
   <Folder Name="/src/Inventory/">
     <Project Path="src/Inventory/Inventory.Service/Inventory.Service.csproj" />
   </Folder>
