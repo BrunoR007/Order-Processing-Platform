@@ -267,3 +267,7 @@ Stop without deleting data using `docker compose down`. A disposable reset with
 `docker compose down --volumes` deletes all local database, broker, Grafana, and metric
 data. Initialization credentials apply only to empty volumes; editing `.env` is not
 credential rotation.
+
+## License
+
+Licensed under the [MIT License](LICENSE).
