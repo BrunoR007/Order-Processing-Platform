@@ -6,10 +6,16 @@ param(
     [int]$Quantity = 1
 )
 $ErrorActionPreference = 'Stop'
-$headers = @{ 'Idempotency-Key' = [Guid]::NewGuid().ToString(); 'X-Correlation-Id' = [Guid]::NewGuid().ToString() }
+$traceId = [Guid]::NewGuid().ToString('N')
+$parentSpanId = [Guid]::NewGuid().ToString('N').Substring(0, 16)
+$headers = @{
+    'Idempotency-Key' = [Guid]::NewGuid().ToString()
+    'X-Correlation-Id' = [Guid]::NewGuid().ToString()
+    'traceparent' = "00-$traceId-$parentSpanId-01"
+}
 $payload = @{ lines = @(@{ sku = 'BOOK-DOTNET'; quantity = $Quantity }) } | ConvertTo-Json -Depth 4
 $order = Invoke-RestMethod -Uri "$BaseUrl/orders" -Method Post -ContentType 'application/json' -Headers $headers -Body $payload
-Write-Host "Order $($order.id), correlation $($order.correlationId)"
+Write-Host "Order $($order.id), correlation $($order.correlationId), trace $traceId"
 $deadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
 do {
     $order = Invoke-RestMethod "$BaseUrl/orders/$($order.id)"
