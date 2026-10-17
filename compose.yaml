@@ -1,0 +1,125 @@
+name: order-processing-platform
+
+x-host: &host
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 40s
+  environment: &host-environment
+    ASPNETCORE_ENVIRONMENT: Production
+    Logging__Console__FormatterName: json
+    RabbitMQ__Host: rabbitmq
+    RabbitMQ__Username: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+    RabbitMQ__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: platform_admin
+      POSTGRES_DB: platform_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD in .env}
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:?Set ORDERS_DB_PASSWORD in .env}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD in .env}
+      PAYMENTS_DB_PASSWORD: ${PAYMENTS_DB_PASSWORD:?Set PAYMENTS_DB_PASSWORD in .env}
+      NOTIFICATIONS_DB_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD:?Set NOTIFICATIONS_DB_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./deploy/postgres/01-create-databases.sh:/docker-entrypoint-initdb.d/01-create-databases.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U platform_admin -d platform_admin -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, check_running]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  orders:
+    <<: *host
+    build:
+      context: .
+      args:
+        PROJECT: src/Orders/Orders.Api/Orders.Api.csproj
+    command: [Orders.Api.dll]
+    environment:
+      <<: *host-environment
+      Database__Host: postgres
+      Database__Name: orders
+      Database__Username: orders
+      Database__Password: ${ORDERS_DB_PASSWORD:?Set ORDERS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5001:8080"
+
+  inventory:
+    <<: *host
+    build:
+      context: .
+      args:
+        PROJECT: src/Inventory/Inventory.Service/Inventory.Service.csproj
+    command: [Inventory.Service.dll]
+    environment:
+      <<: *host-environment
+      Database__Host: postgres
+      Database__Name: inventory
+      Database__Username: inventory
+      Database__Password: ${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5002:8080"
+
+  payments:
+    <<: *host
+    build:
+      context: .
+      args:
+        PROJECT: src/Payments/Payments.Service/Payments.Service.csproj
+    command: [Payments.Service.dll]
+    environment:
+      <<: *host-environment
+      Database__Host: postgres
+      Database__Name: payments
+      Database__Username: payments
+      Database__Password: ${PAYMENTS_DB_PASSWORD:?Set PAYMENTS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5003:8080"
+
+  notifications:
+    <<: *host
+    build:
+      context: .
+      args:
+        PROJECT: src/Notifications/Notifications.Service/Notifications.Service.csproj
+    command: [Notifications.Service.dll]
+    environment:
+      <<: *host-environment
+      Database__Host: postgres
+      Database__Name: notifications
+      Database__Username: notifications
+      Database__Password: ${NOTIFICATIONS_DB_PASSWORD:?Set NOTIFICATIONS_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5004:8080"
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
