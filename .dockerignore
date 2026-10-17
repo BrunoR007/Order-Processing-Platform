@@ -3,6 +3,7 @@
 .git
 .env
 .env.*
+.envrc
 TestResults
 .vs
 .idea
@@ -23,5 +24,12 @@ secrets
 .aws
 .azure
 .kube
+.ssh
+**/id_rsa
+**/id_ecdsa
+**/id_ed25519
+**/*.jks
+**/*.keystore
+**/*.kdbx
 artifacts
 coverage

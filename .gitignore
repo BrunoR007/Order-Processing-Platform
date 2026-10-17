@@ -4,6 +4,7 @@
 .idea/
 .env
 .env.*
+.envrc
 !.env.example
 TestResults/
 *.user
@@ -28,6 +29,13 @@ secrets/
 .aws/
 .azure/
 .kube/
+.ssh/
+id_rsa
+id_ecdsa
+id_ed25519
+*.jks
+*.keystore
+*.kdbx
 # Local databases, dumps, diagnostics, and generated reports
 *.dump
 *.backup

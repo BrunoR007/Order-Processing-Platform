@@ -1,0 +1,54 @@
+name: build, test, and verify
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Check tracked sensitive paths
+        shell: pwsh
+        run: ./scripts/Check-TrackedFiles.ps1
+      - name: Scan Git history for secrets
+        shell: pwsh
+        run: ./scripts/Scan-Secrets.ps1
+      - name: Restore locked dependencies
+        run: dotnet restore OrderProcessingPlatform.slnx --locked-mode
+      - name: Build
+        run: dotnet build OrderProcessingPlatform.slnx --configuration Release --no-restore
+      - name: Check formatting
+        run: dotnet format OrderProcessingPlatform.slnx --verify-no-changes --no-restore
+      - name: Run unit and Testcontainers integration tests
+        run: dotnet test OrderProcessingPlatform.slnx --configuration Release --no-build --logger trx --results-directory TestResults
+      - name: Prepare local demo configuration
+        shell: pwsh
+        run: |
+          ./scripts/Initialize-LocalEnvironment.ps1
+          (Get-Content .env) -replace '^PAYMENT_FAILURE_RATE=.*$', 'PAYMENT_FAILURE_RATE=0' | Set-Content .env
+      - name: Verify Compose startup
+        run: docker compose up --build --wait --wait-timeout 180
+      - name: Verify isolation and complete an order
+        shell: pwsh
+        run: |
+          ./scripts/Verify-Compose.ps1
+          ./scripts/Demo.ps1 -Expected Confirmed
+      - name: Clean up containers
+        if: always()
+        run: docker compose down --remove-orphans
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/*.trx

@@ -16,6 +16,24 @@ namespace OrderProcessing.Platform.IntegrationTests;
 public sealed class OrderPersistenceTests(PostgresFixture fixture)
 {
     [Fact]
+    public async Task Failed_outbox_write_does_not_leave_an_order_without_its_event()
+    {
+        var connectionString = await fixture.CreateDatabase();
+        await using var db = new OrdersDb(PostgresFixture.Options<OrdersDb>(connectionString));
+        await db.Database.MigrateAsync();
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE FUNCTION reject_outbox() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'simulated outbox write failure'; END $$;
+            CREATE TRIGGER reject_outbox BEFORE INSERT ON outbox FOR EACH ROW EXECUTE FUNCTION reject_outbox();
+            """);
+        await Assert.ThrowsAsync<DbUpdateException>(() => new OrderStore(db).Create(
+            new([new("BOOK-DOTNET", 1)]), Guid.NewGuid().ToString(), Guid.NewGuid(), default));
+        db.ChangeTracker.Clear();
+        Assert.Equal(0, await db.Orders.CountAsync());
+        Assert.Equal(0, await db.Outbox.CountAsync());
+    }
+
+    [Fact]
     public async Task Http_creation_is_atomic_idempotent_and_uses_server_prices()
     {
         var connectionString = await fixture.CreateDatabase();

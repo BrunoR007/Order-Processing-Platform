@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,6 +27,15 @@ public sealed class ChoreographyTests(PostgresFixture postgres, BrokerFixture ra
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var ct = timeout.Token;
+        var spans = new ConcurrentBag<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "OrderProcessing.Messaging",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => spans.Add(activity)
+        };
+        ActivitySource.AddActivityListener(listener);
+        var traceId = ActivityTraceId.CreateRandom();
         var config = rabbit.Configuration(rate: failureRate);
         await using (var broker = new RabbitBroker(config))
         await using (var channel = await broker.OpenChannel(ct))
@@ -42,6 +53,7 @@ public sealed class ChoreographyTests(PostgresFixture postgres, BrokerFixture ra
         await using var orders = Factory<Orders.Api.Program, OrdersDb>(ordersConnection, config);
         using var client = orders.CreateClient();
         client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add("traceparent", $"00-{traceId}-{ActivitySpanId.CreateRandom()}-01");
         using var response = await client.PostAsJsonAsync("/orders", new CreateOrderRequest([new("BOOK-DOTNET", 1)]), ct);
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(ct);
@@ -53,6 +65,12 @@ public sealed class ChoreographyTests(PostgresFixture postgres, BrokerFixture ra
         await using var notificationDb = new NotificationsDb(PostgresFixture.Options<NotificationsDb>(notificationsConnection));
         while (!await notificationDb.Notifications.AnyAsync(x => x.OrderId == id, ct)) await Task.Delay(100, ct);
         Assert.Equal(1, await notificationDb.Notifications.CountAsync(ct));
+        foreach (var service in new[] { "inventory", "payments", "orders", "notifications" })
+        {
+            while (!spans.Any(span => span.Kind == ActivityKind.Consumer && span.TraceId == traceId &&
+                span.GetTagItem("messaging.destination.name")?.ToString() == service))
+                await Task.Delay(20, ct);
+        }
     }
 
     private static WebApplicationFactory<TProgram> Factory<TProgram, TDb>(string connectionString, IConfiguration config)
