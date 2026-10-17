@@ -22,6 +22,7 @@
     <Project Path="src/Payments/Payments.Service/Payments.Service.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Orders.UnitTests/Orders.UnitTests.csproj" />
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
   </Folder>
 </Solution>

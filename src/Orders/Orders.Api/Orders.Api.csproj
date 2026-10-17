@@ -3,6 +3,9 @@
     <ProjectReference Include="..\Orders.Application\Orders.Application.csproj" />
     <ProjectReference Include="..\Orders.Infrastructure\Orders.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+  </ItemGroup>
   <PropertyGroup>
     <RootNamespace>OrderProcessing.Orders.Api</RootNamespace>
   </PropertyGroup>

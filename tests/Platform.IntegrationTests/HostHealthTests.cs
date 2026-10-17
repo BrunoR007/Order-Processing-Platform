@@ -3,18 +3,30 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace OrderProcessing.Platform.IntegrationTests;
 
 public abstract class HostHealthTests<TProgram> where TProgram : class
 {
+    private static WebApplicationFactory<TProgram> Factory() => new WebApplicationFactory<TProgram>()
+        .WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Testing");
+            builder.ConfigureServices(services => services.PostConfigure<HealthCheckServiceOptions>(options =>
+            {
+                foreach (var check in options.Registrations.Where(x => x.Name is "database" or "rabbitmq").ToArray())
+                    options.Registrations.Remove(check);
+            }));
+        });
+
     [Theory]
     [InlineData("/health/live")]
     [InlineData("/health/ready")]
     public async Task Running_host_returns_healthy(string path)
     {
-        await using var factory = new WebApplicationFactory<TProgram>();
+        await using var factory = Factory();
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(path);
@@ -30,7 +42,7 @@ public abstract class HostHealthTests<TProgram> where TProgram : class
     public async Task Dependency_failure_affects_readiness_but_not_liveness(
         string path, HttpStatusCode expected)
     {
-        await using var factory = new WebApplicationFactory<TProgram>()
+        await using var factory = Factory()
             .WithWebHostBuilder(builder => builder.ConfigureServices(services =>
                 services.AddHealthChecks().AddCheck("unavailable-dependency",
                     () => HealthCheckResult.Unhealthy("Simulated outage"), tags: ["ready"])));

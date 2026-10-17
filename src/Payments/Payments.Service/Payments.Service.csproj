@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\..\BuildingBlocks\Messaging\Messaging.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+  </ItemGroup>
   <PropertyGroup>
     <RootNamespace>OrderProcessing.Payments.Service</RootNamespace>
   </PropertyGroup>
