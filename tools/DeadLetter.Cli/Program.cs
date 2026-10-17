@@ -28,10 +28,10 @@ for (var index = 0; index < count; index++)
     }
     var envelope = JsonSerializer.Deserialize<EventEnvelope>(delivery.Body.Span, EventEnvelope.Json)
         ?? throw new JsonException("Cannot replay malformed envelope. It remains on the dead-letter queue.");
-    if (!RabbitBroker.Subscriptions[args[1]].Contains(envelope.Type) || envelope.MessageId == Guid.Empty)
-        throw new JsonException("Unsupported envelope. Repair the producer before replaying.");
+    var replay = envelope with { Attempt = 0, LastError = null };
+    replay.ValidateFor(args[1]);
     // Replay only this consumer, keeping its dedup identity and original trace context.
-    await RabbitBroker.Publish(channel, envelope with { Attempt = 0, LastError = null }, args[1], cancellation.Token);
+    await RabbitBroker.Publish(channel, replay, args[1], cancellation.Token);
     await channel.BasicAckAsync(delivery.DeliveryTag, false, cancellation.Token);
     Console.WriteLine($"Replayed {envelope.MessageId} to {args[1]}.");
 }

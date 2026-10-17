@@ -117,10 +117,37 @@ public sealed class RabbitBroker(IConfiguration configuration) : IAsyncDisposabl
                 ["causation-id"] = envelope.CausationId?.ToString() ?? ""
             }
         };
-        await channel.BasicPublishAsync(queue is null ? Exchange : "", queue ?? envelope.Type,
-            mandatory: true, basicProperties: properties,
-            body: JsonSerializer.SerializeToUtf8Bytes(envelope, EventEnvelope.Json), cancellationToken: timeout.Token);
+        try
+        {
+            await channel.BasicPublishAsync(queue is null ? Exchange : "", queue ?? envelope.Type,
+                mandatory: true, basicProperties: properties,
+                body: JsonSerializer.SerializeToUtf8Bytes(envelope, EventEnvelope.Json), cancellationToken: timeout.Token);
+        }
+        catch (Exception exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
+            throw;
+        }
         MessageTelemetry.Published.Add(1, new KeyValuePair<string, object?>("event.type", envelope.Type));
+    }
+
+    public static async Task Quarantine(IChannel channel, BasicGetResult delivery, string consumer,
+        string failureType, CancellationToken ct)
+    {
+        // Preserve the original bytes and AMQP identity even when JSON cannot be decoded.
+        var properties = new BasicProperties(delivery.BasicProperties)
+        {
+            Persistent = true,
+            Expiration = null,
+            UserId = null,
+            Headers = delivery.BasicProperties.Headers is { } headers
+                ? new Dictionary<string, object?>(headers) : new Dictionary<string, object?>()
+        };
+        properties.Headers["failure-type"] = failureType;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        await channel.BasicPublishAsync("", $"{consumer}.dead", mandatory: true,
+            basicProperties: properties, body: delivery.Body, cancellationToken: timeout.Token);
     }
 
     public async ValueTask DisposeAsync()
