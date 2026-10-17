@@ -25,4 +25,7 @@
     <Project Path="tests/Orders.UnitTests/Orders.UnitTests.csproj" />
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/DeadLetter.Cli/DeadLetter.Cli.csproj" />
+  </Folder>
 </Solution>
