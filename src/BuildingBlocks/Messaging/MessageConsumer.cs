@@ -29,9 +29,7 @@ public sealed class MessageConsumer<TDb, THandler>(IServiceScopeFactory scopes,
                     {
                         envelope = JsonSerializer.Deserialize<EventEnvelope>(delivery.Body.Span, EventEnvelope.Json)
                             ?? throw new JsonException("Missing envelope.");
-                        if (envelope.MessageId == Guid.Empty || envelope.CorrelationId == Guid.Empty ||
-                            envelope.Attempt < 0 || !RabbitBroker.Subscriptions[identity.Name].Contains(envelope.Type))
-                            throw new JsonException("Invalid or unsupported event envelope.");
+                        envelope.ValidateFor(identity.Name);
                         logger.LogInformation("Processing {EventType}, message {MessageId}, correlation {CorrelationId}, attempt {Attempt}",
                             envelope.Type, envelope.MessageId, envelope.CorrelationId, envelope.Attempt);
                         await using var scope = scopes.CreateAsyncScope();
@@ -45,17 +43,15 @@ public sealed class MessageConsumer<TDb, THandler>(IServiceScopeFactory scopes,
                         logger.LogWarning(exception, "Consumer {Consumer} failed message {MessageId}, attempt {Attempt}",
                             identity.Name, envelope?.MessageId, envelope?.Attempt);
                         // A malformed payload still goes to the DLQ as the original bytes.
-                        if (envelope is null)
+                        if (envelope is null || exception is JsonException)
                         {
-                            await channel.BasicPublishAsync("", $"{identity.Name}.dead", mandatory: true,
-                                basicProperties: new RabbitMQ.Client.BasicProperties { Persistent = true },
-                                body: delivery.Body, cancellationToken: stoppingToken);
+                            await RabbitBroker.Quarantine(channel, delivery, identity.Name, exception.GetType().Name, stoppingToken);
                             MessageTelemetry.DeadLetters.Add(1);
                         }
                         else
                         {
                             var attempt = envelope.Attempt + 1;
-                            var target = exception is not JsonException && attempt <= RabbitBroker.RetryDelays.Length
+                            var target = attempt <= RabbitBroker.RetryDelays.Length
                                 ? $"{identity.Name}.retry.{attempt}" : $"{identity.Name}.dead";
                             await RabbitBroker.Publish(channel, envelope with
                             {

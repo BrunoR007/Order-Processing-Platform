@@ -164,6 +164,14 @@ success, compensation, retry, DLQ, replay, and broker outage demonstrations.
 
 ## Observe the workflow
 
+For an interview-ready sequence, follow the [five-minute demonstration](docs/demo-walkthrough.md).
+
+![A real order trace through all four services](docs/images/order-trace.png)
+
+![Reliability dashboard from a real local demonstration](docs/images/reliability-dashboard.png)
+
+The capture uses fictional orders and deliberate failure/redelivery exercises, not a benchmark.
+
 Grafana provisions Prometheus, Tempo, and the **Order processing reliability** dashboard.
 It shows pending outbox messages, processed events, retries, dead-letter forwarding,
 and deduplication. Counters appear after their first relevant event.
@@ -211,8 +219,8 @@ certificates, keys, dumps, and diagnostics. Ignoring a file does not untrack it 
 remove historical secrets; the tracked-file guard and history scan cover those gaps.
 
 GitHub Actions runs restore, build, formatting, Testcontainers tests, secret checks,
-and a Compose smoke test. The workflow is committed; a remote run requires pushing
-to a GitHub repository. No CI success badge is claimed before that happens.
+and a Compose smoke test. See the [live workflow runs](https://github.com/BrunoR007/Order-Processing-Platform/actions/workflows/ci.yml)
+and the [verification record](docs/verification.md) for the tested scope.
 
 ## Design decisions and trade-offs
 

@@ -10,6 +10,15 @@ public sealed record EventEnvelope(
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    public void ValidateFor(string consumer)
+    {
+        if (MessageId == Guid.Empty || CorrelationId == Guid.Empty ||
+            Attempt < 0 || Attempt > RabbitBroker.RetryDelays.Length ||
+            Data.ValueKind != JsonValueKind.Object ||
+            !RabbitBroker.Subscriptions[consumer].Contains(Type))
+            throw new JsonException("Invalid or unsupported event envelope.");
+    }
+
     public static EventEnvelope Create<T>(string type, T data, EventEnvelope? parent = null,
         Guid? correlationId = null) => new(
             Guid.NewGuid(), type, parent?.CorrelationId ?? correlationId ?? Guid.NewGuid(),
