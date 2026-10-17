@@ -1,0 +1,45 @@
+{
+  "uid": "order-platform",
+  "title": "Order processing reliability",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pending outbox messages by service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "max by (service_name) (outbox_pending)", "legendFormat": "{{service_name}}" }]
+    },
+    {
+      "id": 2,
+      "title": "Processed events per second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "sum by (service_name) (rate(messages_processed_total[2m]))", "legendFormat": "{{service_name}}" }]
+    },
+    {
+      "id": 3,
+      "title": "Retries and dead-letter forwarding",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "messages_retries_total", "legendFormat": "retries {{service_name}}" },
+        { "refId": "B", "expr": "messages_deadletters_total", "legendFormat": "dead letters {{service_name}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Deduplicated messages",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "messages_duplicates_total", "legendFormat": "{{service_name}}" }]
+    }
+  ]
+}

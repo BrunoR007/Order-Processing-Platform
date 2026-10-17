@@ -32,6 +32,8 @@ public sealed class MessageConsumer<TDb, THandler>(IServiceScopeFactory scopes,
                         if (envelope.MessageId == Guid.Empty || envelope.CorrelationId == Guid.Empty ||
                             envelope.Attempt < 0 || !RabbitBroker.Subscriptions[identity.Name].Contains(envelope.Type))
                             throw new JsonException("Invalid or unsupported event envelope.");
+                        logger.LogInformation("Processing {EventType}, message {MessageId}, correlation {CorrelationId}, attempt {Attempt}",
+                            envelope.Type, envelope.MessageId, envelope.CorrelationId, envelope.Attempt);
                         await using var scope = scopes.CreateAsyncScope();
                         var db = scope.ServiceProvider.GetRequiredService<TDb>();
                         var handler = scope.ServiceProvider.GetRequiredService<THandler>();
@@ -44,21 +46,24 @@ public sealed class MessageConsumer<TDb, THandler>(IServiceScopeFactory scopes,
                             identity.Name, envelope?.MessageId, envelope?.Attempt);
                         // A malformed payload still goes to the DLQ as the original bytes.
                         if (envelope is null)
+                        {
                             await channel.BasicPublishAsync("", $"{identity.Name}.dead", mandatory: true,
                                 basicProperties: new RabbitMQ.Client.BasicProperties { Persistent = true },
                                 body: delivery.Body, cancellationToken: stoppingToken);
+                            MessageTelemetry.DeadLetters.Add(1);
+                        }
                         else
                         {
                             var attempt = envelope.Attempt + 1;
                             var target = exception is not JsonException && attempt <= RabbitBroker.RetryDelays.Length
                                 ? $"{identity.Name}.retry.{attempt}" : $"{identity.Name}.dead";
-                            if (target.EndsWith(".dead", StringComparison.Ordinal)) MessageTelemetry.DeadLetters.Add(1);
-                            else MessageTelemetry.Retries.Add(1);
                             await RabbitBroker.Publish(channel, envelope with
                             {
                                 Attempt = attempt,
                                 LastError = exception.GetType().Name
                             }, target, stoppingToken);
+                            if (target.EndsWith(".dead", StringComparison.Ordinal)) MessageTelemetry.DeadLetters.Add(1);
+                            else MessageTelemetry.Retries.Add(1);
                         }
                     }
                     // On failed forwarding/commit this is never reached: closing the channel requeues delivery.

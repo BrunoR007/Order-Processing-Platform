@@ -15,6 +15,13 @@ public sealed class OutboxRelay<TDb>(IServiceScopeFactory scopes, RabbitBroker b
         {
             try
             {
+                // Refresh even when the broker is offline, so the backlog metric remains useful.
+                await using (var scope = scopes.CreateAsyncScope())
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<TDb>();
+                    Interlocked.Exchange(ref MessageTelemetry.PendingOutbox,
+                        await db.Outbox.CountAsync(x => x.DispatchedAt == null, stoppingToken));
+                }
                 await using var channel = await broker.OpenChannel(stoppingToken);
                 while (channel.IsOpen && !stoppingToken.IsCancellationRequested)
                 {

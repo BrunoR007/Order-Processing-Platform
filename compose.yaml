@@ -10,6 +10,8 @@ x-host: &host
     RabbitMQ__Host: rabbitmq
     RabbitMQ__Username: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
     RabbitMQ__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    OTEL_METRIC_EXPORT_INTERVAL: 5000
   depends_on:
     postgres:
       condition: service_healthy
@@ -101,6 +103,8 @@ services:
       Database__Name: payments
       Database__Username: payments
       Database__Password: ${PAYMENTS_DB_PASSWORD:?Set PAYMENTS_DB_PASSWORD in .env}
+      Payments__FailureRate: ${PAYMENT_FAILURE_RATE:-0.15}
+      Payments__TransientFailuresBeforeSuccess: ${PAYMENT_TRANSIENT_FAILURES:-0}
     ports:
       - "127.0.0.1:5003:8080"
 
@@ -120,6 +124,75 @@ services:
     ports:
       - "127.0.0.1:5004:8080"
 
+  deadletter:
+    <<: *host
+    profiles: [tools]
+    restart: "no"
+    build:
+      context: .
+      args:
+        PROJECT: tools/DeadLetter.Cli/DeadLetter.Cli.csproj
+    entrypoint: [dotnet, DeadLetter.Cli.dll]
+    healthcheck:
+      disable: true
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.163.1
+    command: [--config=/etc/otel/config.yaml]
+    volumes:
+      - ./deploy/observability/collector.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      - tempo
+      - prometheus
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.1.0
+    command: [-config.file=/etc/tempo.yaml, -target=all]
+    user: "10001:10001"
+    volumes:
+      - ./deploy/observability/tempo.yaml:/etc/tempo.yaml:ro
+    tmpfs:
+      - /var/tempo:uid=10001,gid=10001,mode=0700
+    ports:
+      - "127.0.0.1:3200:3200"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command: [--config.file=/etc/prometheus/prometheus.yml, --web.enable-remote-write-receiver, --storage.tsdb.retention.time=7d]
+    volumes:
+      - ./deploy/observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./deploy/observability/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/platform.yaml:ro
+      - ./deploy/observability/grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/platform.yaml:ro
+      - ./deploy/observability/grafana/platform.json:/var/lib/grafana/dashboards/platform.json:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - tempo
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   rabbitmq-data:
+  prometheus-data:
+  grafana-data:
