@@ -1,9 +1,10 @@
 # A five-minute engineering demonstration
 
-Use this walkthrough to explain the project in an interview. The screenshots show
+Use this walkthrough to explore order processing, failure recovery, and distributed
+tracing. The screenshots show
 real local events with fictional data; they are not load-test results.
 
-## Before the call
+## Preparation
 
 1. Start Docker and run `docker compose up --build --wait`.
 2. Open Grafana at http://localhost:3000 and sign in using the local .env credentials.

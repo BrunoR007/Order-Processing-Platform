@@ -8,6 +8,19 @@ Placing an order spans independent databases and a message broker. No single tra
 can atomically cover all of them. This project makes those failure boundaries visible
 instead of claiming exactly-once delivery.
 
+## Engineering highlights
+
+| Challenge | Implementation |
+| --- | --- |
+| Commit business state and publish events reliably | A [hand-written outbox relay](src/BuildingBlocks/Messaging/OutboxRelay.cs) with database locking and broker confirms |
+| Handle duplicate delivery safely | Transactional inbox records and business keys; database changes and outgoing events commit together |
+| Recover from payment failure | Choreographed compensation releases reserved stock before cancelling the order |
+| Diagnose and recover failed processing | Bounded retries, inspectable and replayable dead letters, and traces across all four services |
+
+Explore the [five-minute demo guide](docs/demo-walkthrough.md),
+[verified test and runtime checks](docs/verification.md), and
+[architecture decisions](docs/adr) for concrete examples and trade-offs.
+
 ## Start here
 
 Prerequisites: Docker with the Linux engine and Compose v2. Install the SDK pinned by
@@ -164,7 +177,8 @@ success, compensation, retry, DLQ, replay, and broker outage demonstrations.
 
 ## Observe the workflow
 
-For an interview-ready sequence, follow the [five-minute demonstration](docs/demo-walkthrough.md).
+For a five-minute walkthrough of order processing, failure recovery, and distributed
+tracing, see the [demo guide](docs/demo-walkthrough.md).
 
 ![A real order trace through all four services](docs/images/order-trace.png)
 
