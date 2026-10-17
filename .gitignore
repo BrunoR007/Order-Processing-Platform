@@ -10,3 +10,32 @@ TestResults/
 *.suo
 *.log
 .DS_Store
+# Private configuration and credentials
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/appsettings.Development.json
+**/secrets.json
+**/Properties/launchSettings.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.credentials
+.secrets/
+secrets/
+.aws/
+.azure/
+.kube/
+# Local databases, dumps, diagnostics, and generated reports
+*.dump
+*.backup
+*.sql.gz
+*.db
+*.db-shm
+*.db-wal
+*.dmp
+*.binlog
+coverage/
+artifacts/
